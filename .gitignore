@@ -1,3 +1,6 @@
 /paper
 /data
 /rag-from-scratch
+/.tmp.driveupload
+/.tmp.drivedownload
+/.ipynb_checkpoints

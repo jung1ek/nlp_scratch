@@ -178,23 +178,113 @@ class GRUv2(nn.Module):
     def __init__(self,input_size,hidden_size,num_layers=1):
         super().__init__()
         self.num_layers = num_layers
+        self.hidden_size = hidden_size
 
-        self.Uu 
-        self.Wu
-        self.Bu
+        self.Uu = nn.Parameter(torch.randn(hidden_size,input_size))
+        if num_layers>1:
+            self.Uhu  = nn.Parameter(torch.randn(num_layers-1,hidden_size,hidden_size))
+        self.Wu = nn.Parameter(torch.randn(num_layers,hidden_size,hidden_size))
+        self.Bu = nn.Parameter(torch.randn(num_layers,hidden_size))
 
-        self.Ur
-        self.Wr 
-        self.Br 
+        self.Ur = nn.Parameter(torch.randn(hidden_size,input_size))
+        if num_layers>1:
+            self.Uhr = self.Uhu  = nn.Parameter(torch.randn(num_layers-1,hidden_size,hidden_size))
+        self.Wr = nn.Parameter(torch.randn(num_layers,hidden_size,hidden_size))
+        self.Br = nn.Parameter(torch.randn(num_layers,hidden_size))
 
-        self.U
-        self.W 
-        self.B 
+        self.U = nn.Parameter(torch.randn(hidden_size,input_size))
+        if num_layers>1:
+            self.Uh = self.Uhu  = nn.Parameter(torch.randn(num_layers-1,hidden_size,hidden_size))
+        self.W = nn.Parameter(torch.randn(num_layers,hidden_size,hidden_size))
+        self.B = nn.Parameter(torch.randn(num_layers,hidden_size))
+
+    def forward(self,x):
+        seq_len = x.shape[0]
+        h = torch.zeros(self.num_layers,self.hidden_size)
+
+        for i in range(seq_len):
+            h_new = torch.zeros_like(h)
+            for layer in range(self.num_layers):
+                if layer == 0:
+                    u = torch.sigmoid(self.Uu@x[i]+self.Wu[layer]@h[layer]+self.Bu[layer])
+                    r = torch.sigmoid(self.Ur@x[i]+self.Wr[layer]@h[layer]+self.Br[layer])
+                    candidate = torch.sigmoid(self.U@x[i]+r*(self.W[layer]@h[layer])+self.B[layer])
+                    # u*h = how much info to keep from prev hidden state; (1-u)*new_h = how much to keep from new.
+                    h_new[layer] =  u*h[layer] + (1-u)*candidate
+                else:
+                    u = torch.sigmoid(self.Uhu[layer-1]@h_new[layer-1]+self.Wu[layer]@h[layer]+self.Bu[layer])
+                    r = torch.sigmoid(self.Uhr[layer-1]@h_new[layer-1]+self.Wr[layer]@h[layer]+self.Br[layer])
+                    candidate = torch.sigmoid(self.Uh[layer-1]@h_new[layer-1]+r*(self.W[layer]@h[layer])+self.B[layer])
+                    # u*h = how much info to keep from prev hidden state; (1-u)*new_h = how much to keep from new.
+                    h_new[layer] =  u*h[layer] + (1-u)*candidate
+            h = h_new
+        return h
 
 
 class LSTMv2(nn.Module):
 
-    def __init__(self,):
+    def __init__(self,input_size,hidden_size,num_layers=1):
         super().__init__()
-        
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+
+        # forgot gate, weights for what to forgot from long memory
+        self.Uf = nn.Parameter(torch.rand(hidden_size,input_size))
+        if num_layers>1:
+            self.UHf = nn.Parameter(torch.rand(num_layers-1,hidden_size,hidden_size))
+        self.Wf = nn.Parameter(torch.rand(num_layers,hidden_size,hidden_size))
+        self.Bf = nn.Parameter(torch.rand(num_layers,hidden_size))
+
+        # input gate, new info add to long memory
+        self.Ug = nn.Parameter(torch.rand(hidden_size,input_size))
+        if num_layers>1:
+            self.UHg = nn.Parameter(torch.rand(num_layers-1,hidden_size,hidden_size))
+        self.Wg = nn.Parameter(torch.rand(num_layers,hidden_size,hidden_size))
+        self.Bg = nn.Parameter(torch.rand(num_layers,hidden_size))
+
+        # output gate, how much info to use from long memory to hidden state
+        self.Uq = nn.Parameter(torch.rand(hidden_size,input_size))
+        if num_layers>1:
+            self.UHq = nn.Parameter(torch.rand(num_layers-1,hidden_size,hidden_size))
+        self.Wq = nn.Parameter(torch.rand(num_layers,hidden_size,hidden_size))
+        self.Bq = nn.Parameter(torch.rand(num_layers,hidden_size))
+
+        # weights for state gate, how much long term memory retain new info
+        self.U = nn.Parameter(torch.rand(hidden_size,input_size))
+        if num_layers>1:
+            self.UH = nn.Parameter(torch.rand(num_layers-1,hidden_size,hidden_size))
+        self.W = nn.Parameter(torch.rand(num_layers,hidden_size,hidden_size))
+        self.B = nn.Parameter(torch.rand(num_layers,hidden_size))
+
+
+    def forward(self,x):
+        seq_len = x.shape[0]
+        s = torch.zeros(self.num_layers,self.hidden_size)
+        h = torch.zeros(self.num_layers,self.hidden_size)
+
+        for i in range(seq_len):
+            h_layers = []
+            s_layers = []
+            for layer in range(self.num_layers):
+                if layer == 0:
+                    f = torch.sigmoid(self.Bf[layer]+self.Uf@x[i]+self.Wf[layer]@h[layer])
+                    g = torch.sigmoid(self.Bg[layer]+self.Ug@x[i]+self.Wg[layer]@h[layer])
+                    q = torch.sigmoid(self.Bq[layer]+self.Uq@x[i]+self.Wq[layer]@h[layer])
+                    candidate = torch.sigmoid(self.B[layer]+self.U@x[i]+self.W[layer]@h[layer])# new long term memory candidate with new input info
+                    s_layer = f*s[layer]+g*candidate
+                    h_layer = torch.tanh(s_layer)*q
+                else:
+                    f = torch.sigmoid(self.Bf[layer]+self.UHf[layer-1]@h_layers[layer-1]+self.Wf[layer]@h[layer])
+                    g = torch.sigmoid(self.Bg[layer]+self.UHg[layer-1]@h_layers[layer-1]+self.Wg[layer]@h[layer])
+                    q = torch.sigmoid(self.Bq[layer]+self.UHq[layer-1]@h_layers[layer-1]+self.Wq[layer]@h[layer])
+                    candidate = torch.sigmoid(self.B[layer]+self.UH[layer-1]@h_layers[layer-1]+self.W[layer]@h[layer])# new long term memorys
+                    s_layer = f*s[layer]+g*candidate
+                    h_layer = torch.tanh(s_layer)*q
+                h_layers.append(h_layer)
+                s_layers.append(s_layer)
+            s = torch.stack(s_layers)
+            h = torch.stack(h_layers)
+
+        return h
+
 

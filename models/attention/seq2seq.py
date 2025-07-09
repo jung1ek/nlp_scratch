@@ -53,11 +53,21 @@ class Decoder(nn.Module):
         # encoder's hidden weight, for calc e.
         self.u = nn.Parameter(torch.randn(self.hidden_size,self.hidden_size*2))
 
-        # weghts for decoder calculating hidden value (s)
-        self.w_ih = nn.Parameter(torch.randn(hidden_size,input_size))
-        self.w_hh = nn.Parameter(torch.randn(hidden_size,hidden_size))
-        self.w_ch = nn.Parameter(torch.randn(hidden_size,hidden_size))
+        # ffn weight
+        self.v = nn.Parameter(torch.randn(hidden_size))
 
+        # weghts for decoder calculating hidden value (s),c_s, candidate s
+        self.w_w = nn.Parameter(torch.randn(hidden_size,input_size))
+        self.w_u = nn.Parameter(torch.randn(hidden_size,hidden_size))
+        self.w_c = nn.Parameter(torch.randn(hidden_size,hidden_size))
+
+        # reset gate and update gate.
+        self.w_z = nn.Parameter(torch.randn(hidden_size,input_size))
+        self.w_r = nn.Parameter(torch.randn(hidden_size,input_size))
+        self.u_z = nn.Parameter(torch.randn(hidden_size,input_size))
+        self.u_r = nn.Parameter(torch.randn(hidden_size,input_size))
+        self.c_z = nn.Parameter(torch.randn(hidden_size,input_size*2))
+        self.c_r = nn.Parameter(torch.randn(hidden_size,input_size*2))
 
     def forward(self,enc_h,y):
         seq_len,_= y.shape
@@ -65,9 +75,28 @@ class Decoder(nn.Module):
 
         # calculating attention, and making each input scalar. (seq,h_enc) = seq,
         # eij refers to for each i in output seq, every j (input seq), matrix correlation of each input with output
-        e = None
         for i in range(seq_len):
-            pass
+            ei =  torch.tanh(self.w@s + enc_h @ self.u.T) @ self.v
+            # weight vector of dim(input_seq,)
+            ai = torch.exp(ei)/torch.sum(torch.exp(ei),dim=-1)
+            # weighted sum of input_seq ,context vector of dim 2*n
+            ci = ai @ enc_h
+            # reset gate
+            r = torch.sigmoid(self.w_r@y[i] + self.u_r@s + self.c_r@ci)
+            # update gate
+            z = torch.sigmoid(self.w_z@y[i] + self.u_z@s + self.c_z@ci)
+            # new candidate s
+            c_s = torch.tanh(self.w_w @ y[i] + self.w_u@(s*r) + self.w_c @ ci )
+
+            # new state s, if z~1 keep new info mostly, if 0 old info mostly
+            s = (1-z) * s + z*c_s
+            
+            
+
+            
+
+
+
 
 
         

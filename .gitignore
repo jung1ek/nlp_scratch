@@ -4,3 +4,5 @@
 /.tmp.driveupload
 /.tmp.drivedownload
 /.ipynb_checkpoints
+/models/__pycache__
+/models/attention/__pycache__

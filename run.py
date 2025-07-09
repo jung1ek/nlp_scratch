@@ -9,6 +9,7 @@ w = torch.rand(n,n)
 u = torch.rand(n,2*n)
 v = torch.rand(n)
 s = torch.zeros(n) # initial state of decoder layer
-e = v @ torch.tanh(w@s+(u@h_enc.T).T).T
-a = torch.exp(e)/torch.sum(torch.exp(e))
-print(a)
+e = torch.tanh(w@s+h_enc@u.T) @ v
+a = torch.exp(e)/torch.sum(torch.exp(e),dim=-1)
+c = a@h_enc
+print(c.shape)
